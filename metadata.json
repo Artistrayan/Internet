@@ -1,0 +1,6 @@
+{
+  "name": "Internet Guardian",
+  "description": "Production-ready smart network stability and auto-fix system.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
