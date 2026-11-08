@@ -1,0 +1,44 @@
+name: Real network core CI
+
+on:
+  push:
+    branches: [main, real-network-core]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm run build
+      - name: Start real HTTP measurement service
+        run: |
+          npm run server > /tmp/internet-measurement-node.log 2>&1 &
+          echo $! > /tmp/internet-measurement-node.pid
+          for attempt in $(seq 1 30); do
+            if curl --fail --silent http://127.0.0.1:8080/healthz > /dev/null; then
+              exit 0
+            fi
+            sleep 1
+          done
+          cat /tmp/internet-measurement-node.log
+          exit 1
+      - name: Verify actual HTTP probe and byte transfers
+        run: node server/smoke-test.mjs
+      - name: Stop measurement service
+        if: always()
+        run: |
+          if [ -f /tmp/internet-measurement-node.pid ]; then
+            kill "$(cat /tmp/internet-measurement-node.pid)" || true
+          fi
