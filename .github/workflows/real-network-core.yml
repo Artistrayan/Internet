@@ -21,9 +21,10 @@ jobs:
       - run: npm install --no-audit --no-fund
       - run: npm run typecheck
       - run: npm run build
+      - run: npm run build:server
       - name: Start real HTTP measurement service
         run: |
-          npm run server > /tmp/internet-measurement-node.log 2>&1 &
+          npm run start:server > /tmp/internet-measurement-node.log 2>&1 &
           echo $! > /tmp/internet-measurement-node.pid
           for attempt in $(seq 1 30); do
             if curl --fail --silent http://127.0.0.1:8080/healthz > /dev/null; then
