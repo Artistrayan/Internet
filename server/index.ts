@@ -7,6 +7,7 @@ const MAX_TEST_BYTES = 16 * 1024 * 1024;
 const CHUNK_BYTES = 64 * 1024;
 const app = Fastify({
   logger: true,
+  disableRequestLogging: true,
   bodyLimit: MAX_TEST_BYTES,
   trustProxy: process.env.TRUST_PROXY === 'true',
 });
