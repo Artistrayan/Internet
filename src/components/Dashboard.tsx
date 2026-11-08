@@ -1,422 +1,222 @@
-import React from 'react';
-import {
-  ShieldCheck,
-  ShieldAlert,
-  Activity,
-  Wifi,
-  Signal,
-  Clock,
-  AlertTriangle,
-  CheckCircle2,
-  XCircle,
-  Play,
-  Square,
-  Wrench,
-  RotateCcw,
-  Server,
-  Zap,
-  Globe,
-  Trash2
-} from 'lucide-react';
-import { useNetworkGuardian } from '../hooks/useNetworkGuardian';
-import { AutoFixType } from '../core/types';
+import { useCallback, useEffect, useState } from 'react';
+import { Activity, ArrowDownToLine, ArrowUpFromLine, CircleAlert, CircleCheck, Gauge, Globe2, Play, Radio, Square, Wifi } from 'lucide-react';
+import { LiveMeasurementClient, LiveMeasurementResult } from '../core/network/LiveMeasurementClient';
 
-export const Dashboard: React.FC = () => {
-  const {
-    state,
-    startMonitoring,
-    stopMonitoring,
-    runSingleDiagnostic,
-    executeAutoFix,
-    clearHistory
-  } = useNetworkGuardian();
+const apiUrl = import.meta.env.VITE_MEASUREMENT_API_URL as string | undefined;
 
-  const {
-    metrics,
-    stabilityScore,
-    recommendations,
-    history,
-    isMonitoring,
-    isFixing,
-    fixStatusMessage,
-    lastUpdated
-  } = state;
+function metric(value: number | null, unit: string, digits = 1): string {
+  return value === null ? '—' : `${value.toFixed(digits)} ${unit}`;
+}
 
-  const getScoreColor = (score: number) => {
-    if (score >= 90) return 'text-emerald-400 border-emerald-500/30 bg-emerald-500/10';
-    if (score >= 75) return 'text-teal-400 border-teal-500/30 bg-teal-500/10';
-    if (score >= 50) return 'text-amber-400 border-amber-500/30 bg-amber-500/10';
-    return 'text-rose-400 border-rose-500/30 bg-rose-500/10';
-  };
+function MetricCard({ label, value, unit, icon: Icon }: {
+  label: string;
+  value: number | null;
+  unit: string;
+  icon: typeof Activity;
+}) {
+  return (
+    <section className="rounded-2xl border border-slate-800 bg-slate-900/70 p-5">
+      <div className="flex items-center justify-between text-slate-400">
+        <span className="text-sm">{label}</span>
+        <Icon size={18} />
+      </div>
+      <div className="mt-4 font-mono text-3xl font-semibold text-white">
+        {metric(value, unit)}
+      </div>
+      <p className="mt-2 text-xs text-slate-500">نتیجه اندازه‌گیری زنده؛ بدون مقدار پیش‌فرض</p>
+    </section>
+  );
+}
 
-  const getGradeBadge = (grade: string) => {
-    switch (grade) {
-      case 'EXCELLENT':
-        return 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30';
-      case 'GOOD':
-        return 'bg-teal-500/20 text-teal-300 border-teal-500/30';
-      case 'FAIR':
-        return 'bg-amber-500/20 text-amber-300 border-amber-500/30';
-      case 'POOR':
-      case 'CRITICAL':
-      default:
-        return 'bg-rose-500/20 text-rose-300 border-rose-500/30';
+export function Dashboard() {
+  const [result, setResult] = useState<LiveMeasurementResult | null>(null);
+  const [running, setRunning] = useState(false);
+  const [continuous, setContinuous] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const runMeasurement = useCallback(async () => {
+    setRunning(true);
+    setError(null);
+    try {
+      const client = new LiveMeasurementClient(apiUrl);
+      const measured = await client.measure();
+      setResult(measured);
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'اندازه‌گیری انجام نشد.');
+    } finally {
+      setRunning(false);
     }
-  };
+  }, []);
+
+  useEffect(() => {
+    if (!continuous) return;
+    void runMeasurement();
+    const timer = window.setInterval(() => void runMeasurement(), 60_000);
+    return () => window.clearInterval(timer);
+  }, [continuous, runMeasurement]);
+
+  const successfulProbes = result?.probeSamples.filter((sample) => sample.succeeded).length ?? null;
+  const failedProbes = result?.probeSamples.filter((sample) => !sample.succeeded).length ?? null;
 
   return (
-    <div id="guardian-dashboard" className="min-h-screen bg-neutral-950 text-neutral-100 p-4 sm:p-6 lg:p-8 font-sans">
-      <div className="max-w-6xl mx-auto space-y-6">
-        {/* Header Bar */}
-        <header id="header-bar" className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-neutral-800">
-          <div className="flex items-center space-x-3">
-            <div className="p-2.5 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400">
-              <ShieldCheck className="w-7 h-7" />
-            </div>
-            <div>
-              <div className="flex items-center space-x-2">
-                <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-white">Internet Guardian</h1>
-                <span className="text-xs px-2 py-0.5 rounded-full bg-neutral-800 text-neutral-400 font-medium">v1.2 Active</span>
+    <main dir="rtl" className="min-h-screen bg-[#070b13] px-4 py-6 text-slate-100 sm:px-8">
+      <div className="mx-auto max-w-6xl space-y-6">
+        <header className="flex flex-col gap-5 border-b border-slate-800 pb-6 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <div className="flex items-center gap-3">
+              <div className="rounded-xl border border-cyan-400/20 bg-cyan-400/10 p-3 text-cyan-300">
+                <Wifi size={25} />
               </div>
-              <p className="text-xs sm:text-sm text-neutral-400 mt-0.5">
-                Autonomous network stability telemetry & self-healing auto-fix engine
-              </p>
+              <div>
+                <h1 className="text-2xl font-bold tracking-tight">موتور جامع اینترنت</h1>
+                <p className="mt-1 text-sm text-slate-400">هسته اندازه‌گیری واقعی شبکه</p>
+              </div>
             </div>
+            <p className="mt-4 max-w-2xl text-sm leading-7 text-slate-400">
+              این پنل فقط داده‌ای را نمایش می‌دهد که در همین اتصال و در زمان آزمایش اندازه‌گیری شده باشد.
+              تا قبل از اتصال به سرور اندازه‌گیری، هیچ عدد یا امتیازی تولید نمی‌شود.
+            </p>
           </div>
 
-          <div className="flex items-center space-x-2">
-            {!isMonitoring ? (
-              <button
-                id="btn-start-monitor"
-                onClick={startMonitoring}
-                disabled={isFixing}
-                className="flex items-center space-x-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-semibold rounded-lg shadow-sm transition-colors cursor-pointer disabled:opacity-50"
-              >
-                <Play className="w-4 h-4 fill-current" />
-                <span>Start Monitor</span>
-              </button>
-            ) : (
-              <button
-                id="btn-stop-monitor"
-                onClick={stopMonitoring}
-                disabled={isFixing}
-                className="flex items-center space-x-2 px-4 py-2 bg-rose-600 hover:bg-rose-500 text-white text-sm font-semibold rounded-lg shadow-sm transition-colors cursor-pointer disabled:opacity-50"
-              >
-                <Square className="w-4 h-4 fill-current" />
-                <span>Stop Monitor</span>
-              </button>
-            )}
-
+          <div className="flex flex-wrap gap-2">
             <button
-              id="btn-run-diagnostic"
-              onClick={runSingleDiagnostic}
-              disabled={isFixing}
-              className="flex items-center space-x-2 px-3.5 py-2 bg-neutral-800 hover:bg-neutral-700 text-neutral-200 text-sm font-medium rounded-lg border border-neutral-700 transition-colors cursor-pointer disabled:opacity-50"
-              title="Run instant probe"
+              type="button"
+              onClick={() => void runMeasurement()}
+              disabled={running || !apiUrl}
+              className="inline-flex items-center gap-2 rounded-xl bg-cyan-500 px-4 py-3 text-sm font-semibold text-slate-950 transition hover:bg-cyan-400 disabled:cursor-not-allowed disabled:opacity-40"
             >
-              <RotateCcw className="w-4 h-4" />
-              <span className="hidden sm:inline">Probe Now</span>
+              <Play size={16} />
+              {running ? 'در حال اندازه‌گیری…' : 'آزمایش واقعی'}
+            </button>
+            <button
+              type="button"
+              onClick={() => setContinuous((value) => !value)}
+              disabled={!apiUrl}
+              className="inline-flex items-center gap-2 rounded-xl border border-slate-700 px-4 py-3 text-sm text-slate-200 transition hover:bg-slate-800 disabled:opacity-40"
+            >
+              {continuous ? <Square size={16} /> : <Radio size={16} />}
+              {continuous ? 'توقف پایش' : 'پایش پیوسته'}
             </button>
           </div>
         </header>
 
-        {/* Real-time Status / Alert Banner if Fixing */}
-        {fixStatusMessage && (
-          <div id="status-banner" className="p-3.5 rounded-xl bg-cyan-950/40 border border-cyan-500/30 text-cyan-200 text-sm flex items-center space-x-3">
-            <Zap className="w-5 h-5 text-cyan-400 animate-pulse shrink-0" />
-            <span className="font-mono text-xs sm:text-sm">{fixStatusMessage}</span>
-          </div>
+        {!apiUrl && (
+          <section className="flex gap-3 rounded-2xl border border-amber-500/30 bg-amber-500/10 p-4 text-amber-100">
+            <CircleAlert className="mt-0.5 shrink-0" size={20} />
+            <div>
+              <h2 className="font-semibold">سرور اندازه‌گیری هنوز پیکربندی نشده است</h2>
+              <p className="mt-1 text-sm leading-6 text-amber-100/80">
+                متغیر VITE_MEASUREMENT_API_URL باید به آدرس سرور واقعی متصل شود.
+                تا آن زمان، نمایش سرعت، پینگ و آمار شبکه غیرفعال می‌ماند.
+              </p>
+            </div>
+          </section>
         )}
 
-        {/* Top Metric Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          {/* Stability Score Card */}
-          <div id="card-stability-score" className="p-5 rounded-2xl bg-neutral-900/70 border border-neutral-800 flex flex-col justify-between">
-            <div className="flex items-center justify-between">
-              <span className="text-xs font-semibold uppercase tracking-wider text-neutral-400">Stability Index</span>
-              <span className={`text-xs px-2.5 py-0.5 rounded-full font-semibold border ${getGradeBadge(stabilityScore.grade)}`}>
-                {stabilityScore.grade}
-              </span>
-            </div>
+        {error && (
+          <section className="rounded-2xl border border-rose-500/30 bg-rose-500/10 p-4 text-sm text-rose-200">
+            خطای اندازه‌گیری: {error}
+          </section>
+        )}
 
-            <div className="my-4 flex items-baseline space-x-3">
-              <span className={`text-4xl sm:text-5xl font-bold font-mono ${getScoreColor(stabilityScore.score).split(' ')[0]}`}>
-                {stabilityScore.score}
-              </span>
-              <span className="text-sm text-neutral-500 font-mono">/ 100</span>
-            </div>
+        <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+          <MetricCard label="تأخیر میانگین" value={result?.latencyMs ?? null} unit="ms" icon={Activity} />
+          <MetricCard label="نوسان تأخیر" value={result?.jitterMs ?? null} unit="ms" icon={Gauge} />
+          <MetricCard label="سرعت دریافت" value={result?.download.megabitsPerSecond ?? null} unit="Mbps" icon={ArrowDownToLine} />
+          <MetricCard label="سرعت ارسال" value={result?.upload.megabitsPerSecond ?? null} unit="Mbps" icon={ArrowUpFromLine} />
+        </section>
 
-            <div className="space-y-1">
-              {stabilityScore.reasons.slice(0, 2).map((reason, idx) => (
-                <p key={idx} className="text-xs text-neutral-400 flex items-center space-x-1.5">
-                  <span className="w-1.5 h-1.5 rounded-full bg-neutral-600"></span>
-                  <span className="truncate">{reason}</span>
+        <section className="grid gap-4 lg:grid-cols-2">
+          <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-5">
+            <div className="flex items-center gap-2">
+              <Globe2 className="text-cyan-300" size={19} />
+              <h2 className="font-semibold">کیفیت اتصال به نقطه اندازه‌گیری</h2>
+            </div>
+            <div className="mt-5 grid grid-cols-2 gap-3">
+              <div className="rounded-xl bg-slate-950 p-4">
+                <p className="text-xs text-slate-500">Packet Loss آزمون HTTP</p>
+                <p className="mt-2 font-mono text-2xl text-white">{metric(result?.packetLossPercent ?? null, '%')}</p>
+              </div>
+              <div className="rounded-xl bg-slate-950 p-4">
+                <p className="text-xs text-slate-500">پروب موفق</p>
+                <p className="mt-2 font-mono text-2xl text-white">
+                  {successfulProbes === null ? '—' : `${successfulProbes}/5`}
                 </p>
-              ))}
-            </div>
-          </div>
-
-          {/* Connection Overview Card */}
-          <div id="card-connection-overview" className="p-5 rounded-2xl bg-neutral-900/70 border border-neutral-800 flex flex-col justify-between">
-            <div className="flex items-center justify-between">
-              <span className="text-xs font-semibold uppercase tracking-wider text-neutral-400">Connection State</span>
-              <div className="flex items-center space-x-1.5">
-                <span className={`w-2 h-2 rounded-full ${metrics?.isInternetReachable ? 'bg-emerald-400 animate-pulse' : 'bg-rose-400'}`}></span>
-                <span className="text-xs text-neutral-400 font-medium">
-                  {isMonitoring ? 'Live Polling' : 'Idle / Ready'}
-                </span>
               </div>
             </div>
-
-            <div className="my-3 grid grid-cols-2 gap-2">
-              <div className="p-2.5 rounded-xl bg-neutral-950 border border-neutral-800/80">
-                <span className="text-[11px] text-neutral-500 block">Link Interface</span>
-                <div className="flex items-center space-x-1.5 mt-1">
-                  {metrics?.type === 'wifi' ? (
-                    <Wifi className="w-4 h-4 text-emerald-400" />
-                  ) : (
-                    <Signal className="w-4 h-4 text-cyan-400" />
-                  )}
-                  <span className="text-sm font-semibold uppercase text-neutral-200">
-                    {metrics?.type || 'UNKNOWN'}
-                  </span>
-                </div>
-              </div>
-
-              <div className="p-2.5 rounded-xl bg-neutral-950 border border-neutral-800/80">
-                <span className="text-[11px] text-neutral-500 block">WAN Reachability</span>
-                <div className="flex items-center space-x-1.5 mt-1">
-                  {metrics?.isInternetReachable ? (
-                    <CheckCircle2 className="w-4 h-4 text-emerald-400" />
-                  ) : (
-                    <XCircle className="w-4 h-4 text-rose-400" />
-                  )}
-                  <span className="text-sm font-semibold text-neutral-200">
-                    {metrics?.isInternetReachable ? 'Online' : 'Offline'}
-                  </span>
-                </div>
-              </div>
-            </div>
-
-            <p className="text-[11px] text-neutral-500">
-              Last Telemetry: {lastUpdated ? new Date(lastUpdated).toLocaleTimeString() : 'Not measured yet'}
+            <p className="mt-4 text-xs leading-6 text-slate-500">
+              این Packet Loss بر اساس درخواست‌های HTTP ناموفق به سرور آزمایش محاسبه می‌شود؛
+              معادل اندازه‌گیری افت بسته در سطح IP نیست.
             </p>
-          </div>
-
-          {/* Latency & Quality Summary Card */}
-          <div id="card-latency-quality" className="p-5 rounded-2xl bg-neutral-900/70 border border-neutral-800 flex flex-col justify-between">
-            <div className="flex items-center justify-between">
-              <span className="text-xs font-semibold uppercase tracking-wider text-neutral-400">Round-Trip Quality</span>
-              <Activity className="w-4 h-4 text-neutral-400" />
-            </div>
-
-            <div className="grid grid-cols-3 gap-2 my-2">
-              <div className="p-2 rounded-xl bg-neutral-950 border border-neutral-800/80 text-center">
-                <span className="text-[10px] text-neutral-500 uppercase block">Latency</span>
-                <span className="text-base font-bold font-mono text-neutral-200 mt-0.5 block">
-                  {metrics?.latencyMs != null ? `${metrics.latencyMs}ms` : '--'}
-                </span>
+            {failedProbes !== null && failedProbes > 0 && (
+              <div className="mt-3 space-y-1 text-xs text-rose-300">
+                {result?.probeSamples.filter((sample) => !sample.succeeded).map((sample) => (
+                  <p key={sample.sequence}>پروب {sample.sequence}: {sample.error}</p>
+                ))}
               </div>
-
-              <div className="p-2 rounded-xl bg-neutral-950 border border-neutral-800/80 text-center">
-                <span className="text-[10px] text-neutral-500 uppercase block">Jitter</span>
-                <span className="text-base font-bold font-mono text-neutral-200 mt-0.5 block">
-                  {metrics?.jitterMs != null ? `${metrics.jitterMs}ms` : '--'}
-                </span>
-              </div>
-
-              <div className="p-2 rounded-xl bg-neutral-950 border border-neutral-800/80 text-center">
-                <span className="text-[10px] text-neutral-500 uppercase block">Loss</span>
-                <span className="text-base font-bold font-mono text-neutral-200 mt-0.5 block">
-                  {metrics?.packetLossPercent != null ? `${metrics.packetLossPercent}%` : '--'}
-                </span>
-              </div>
-            </div>
-
-            <div className="text-[11px] text-neutral-400 flex items-center justify-between">
-              <span>Bandwidth:</span>
-              <span className="font-mono text-neutral-300">
-                {metrics?.downloadBandwidthMbps != null ? `~${metrics.downloadBandwidthMbps} Mbps` : 'Auto-detected'}
-              </span>
-            </div>
-          </div>
-        </div>
-
-        {/* Middle Section: Edge Endpoint Ping Matrix & Decision Engine */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {/* Anycast Edge Nodes */}
-          <div id="card-edge-endpoints" className="p-5 rounded-2xl bg-neutral-900/70 border border-neutral-800 space-y-4">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center space-x-2">
-                <Globe className="w-4 h-4 text-emerald-400" />
-                <h2 className="text-sm font-semibold text-neutral-200">Global Edge Endpoints</h2>
-              </div>
-              <span className="text-xs text-neutral-500 font-mono">Anycast HTTP RTT</span>
-            </div>
-
-            <div className="space-y-2.5">
-              {metrics?.endpointMeasurements && metrics.endpointMeasurements.length > 0 ? (
-                metrics.endpointMeasurements.map((ep, idx) => (
-                  <div
-                    key={idx}
-                    className="p-3 rounded-xl bg-neutral-950 border border-neutral-800/90 flex items-center justify-between text-xs"
-                  >
-                    <div className="flex items-center space-x-2.5">
-                      {ep.status === 'reachable' ? (
-                        <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
-                      ) : ep.status === 'degraded' ? (
-                        <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0" />
-                      ) : (
-                        <XCircle className="w-4 h-4 text-rose-400 shrink-0" />
-                      )}
-                      <div>
-                        <div className="font-medium text-neutral-200">{ep.name}</div>
-                        <div className="text-[10px] text-neutral-500 font-mono truncate max-w-[200px] sm:max-w-xs">
-                          {ep.url}
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="text-right">
-                      <span className={`font-mono font-semibold ${ep.latencyMs != null ? 'text-neutral-200' : 'text-rose-400'}`}>
-                        {ep.latencyMs != null ? `${ep.latencyMs} ms` : 'Failed'}
-                      </span>
-                    </div>
-                  </div>
-                ))
-              ) : (
-                <div className="p-6 rounded-xl bg-neutral-950/60 border border-neutral-800 text-center text-xs text-neutral-500">
-                  Click 'Start Monitor' or 'Probe Now' to measure live edge latency.
-                </div>
-              )}
-            </div>
-          </div>
-
-          {/* Smart Decision Engine & Auto-Fix */}
-          <div id="card-decision-engine" className="p-5 rounded-2xl bg-neutral-900/70 border border-neutral-800 space-y-4">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center space-x-2">
-                <Wrench className="w-4 h-4 text-cyan-400" />
-                <h2 className="text-sm font-semibold text-neutral-200">Decision Engine & Self-Healing</h2>
-              </div>
-              <span className="text-xs text-cyan-400/80 font-mono">Autonomous AI Core</span>
-            </div>
-
-            <div className="space-y-3">
-              {recommendations.length > 0 ? (
-                recommendations.map(rec => (
-                  <div
-                    key={rec.id}
-                    className={`p-3.5 rounded-xl border ${
-                      rec.severity === 'critical'
-                        ? 'bg-rose-950/20 border-rose-500/30'
-                        : rec.severity === 'warning'
-                        ? 'bg-amber-950/20 border-amber-500/30'
-                        : 'bg-neutral-950 border-neutral-800'
-                    } space-y-2`}
-                  >
-                    <div className="flex items-start justify-between gap-2">
-                      <div className="flex items-center space-x-2">
-                        {rec.severity === 'critical' ? (
-                          <ShieldAlert className="w-4 h-4 text-rose-400 shrink-0" />
-                        ) : rec.severity === 'warning' ? (
-                          <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0" />
-                        ) : (
-                          <ShieldCheck className="w-4 h-4 text-emerald-400 shrink-0" />
-                        )}
-                        <h3 className="text-xs font-semibold text-neutral-200">{rec.title}</h3>
-                      </div>
-                    </div>
-
-                    <p className="text-[11px] text-neutral-400 leading-relaxed">{rec.description}</p>
-
-                    <div className="pt-1 flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-t border-neutral-800/60">
-                      <span className="text-[10px] text-neutral-500">{rec.suggestedAction}</span>
-
-                      {rec.autoFixAvailable && rec.fixType && (
-                        <button
-                          id={`btn-autofix-${rec.id}`}
-                          onClick={() => executeAutoFix(rec.fixType as AutoFixType)}
-                          disabled={isFixing}
-                          className="px-3 py-1 bg-cyan-600 hover:bg-cyan-500 text-white text-xs font-medium rounded-lg shadow-sm transition-colors cursor-pointer shrink-0 disabled:opacity-50 flex items-center space-x-1.5"
-                        >
-                          <Zap className="w-3 h-3 fill-current" />
-                          <span>Apply Auto-Fix</span>
-                        </button>
-                      )}
-                    </div>
-                  </div>
-                ))
-              ) : (
-                <div className="p-6 rounded-xl bg-neutral-950/60 border border-neutral-800 text-center text-xs text-neutral-500">
-                  Ready to analyze network heuristics.
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-
-        {/* Telemetry History Table */}
-        <div id="card-telemetry-history" className="p-5 rounded-2xl bg-neutral-900/70 border border-neutral-800 space-y-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-2">
-              <Server className="w-4 h-4 text-neutral-400" />
-              <h2 className="text-sm font-semibold text-neutral-200">Live Telemetry History</h2>
-            </div>
-            {history.length > 0 && (
-              <button
-                id="btn-clear-history"
-                onClick={clearHistory}
-                className="text-xs text-neutral-500 hover:text-rose-400 transition-colors flex items-center space-x-1 cursor-pointer"
-              >
-                <Trash2 className="w-3.5 h-3.5" />
-                <span>Clear</span>
-              </button>
             )}
           </div>
 
-          {history.length > 0 ? (
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-xs font-mono">
-                <thead>
-                  <tr className="border-b border-neutral-800 text-neutral-500 uppercase text-[10px]">
-                    <th className="pb-2 font-medium">Timestamp</th>
-                    <th className="pb-2 font-medium">Stability</th>
-                    <th className="pb-2 font-medium">Latency</th>
-                    <th className="pb-2 font-medium">Jitter</th>
-                    <th className="pb-2 font-medium text-right">Status</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-neutral-850">
-                  {history.slice(0, 8).map((entry, idx) => (
-                    <tr key={idx} className="hover:bg-neutral-800/20">
-                      <td className="py-2 text-neutral-400">
-                        {new Date(entry.timestamp).toLocaleTimeString()}
-                      </td>
-                      <td className="py-2 text-neutral-200">{entry.score}/100</td>
-                      <td className="py-2 text-neutral-300">
-                        {entry.latencyMs != null ? `${entry.latencyMs}ms` : '--'}
-                      </td>
-                      <td className="py-2 text-neutral-400">
-                        {entry.jitterMs != null ? `${entry.jitterMs}ms` : '--'}
-                      </td>
-                      <td className="py-2 text-right">
-                        <span className={`px-2 py-0.5 rounded text-[10px] font-sans font-medium ${getGradeBadge(entry.status)}`}>
-                          {entry.status}
-                        </span>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+          <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-5">
+            <div className="flex items-center gap-2">
+              <Activity className="text-cyan-300" size={19} />
+              <h2 className="font-semibold">صحت انتقال داده</h2>
             </div>
-          ) : (
-            <div className="p-4 text-center text-xs text-neutral-500 font-mono">
-              No historical log entries recorded.
+            <div className="mt-5 space-y-4">
+              <div className="flex items-center justify-between gap-3 border-b border-slate-800 pb-3">
+                <span className="text-sm text-slate-400">داده دریافت‌شده</span>
+                <span className="font-mono text-sm text-white">
+                  {result?.download.bytesTransferred === null || !result ? '—' : `${(result.download.bytesTransferred / 1_048_576).toFixed(2)} MiB`}
+                </span>
+              </div>
+              <div className="flex items-center justify-between gap-3 border-b border-slate-800 pb-3">
+                <span className="text-sm text-slate-400">داده تأییدشده ارسالی</span>
+                <span className="font-mono text-sm text-white">
+                  {result?.upload.bytesTransferred === null || !result ? '—' : `${(result.upload.bytesTransferred / 1_048_576).toFixed(2)} MiB`}
+                </span>
+              </div>
+              <div className="flex items-center justify-between gap-3">
+                <span className="text-sm text-slate-400">زمان آخرین آزمایش</span>
+                <span className="font-mono text-xs text-white">
+                  {result ? new Date(result.measuredAt).toLocaleString() : 'هنوز اندازه‌گیری نشده'}
+                </span>
+              </div>
             </div>
-          )}
-        </div>
+            {(result?.download.error || result?.upload.error) && (
+              <div className="mt-4 space-y-1 text-xs text-rose-300">
+                {result.download.error && <p>دریافت: {result.download.error}</p>}
+                {result.upload.error && <p>ارسال: {result.upload.error}</p>}
+              </div>
+            )}
+          </div>
+        </section>
+
+        <section className="rounded-2xl border border-slate-800 bg-slate-900/50 p-5">
+          <div className="flex items-center gap-2">
+            <CircleCheck className="text-cyan-300" size={19} />
+            <h2 className="font-semibold">وضعیت قابلیت‌ها</h2>
+          </div>
+          <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+            {[
+              ['اندازه‌گیری واقعی HTTP', apiUrl ? 'آماده پس از اتصال سرور' : 'منتظر پیکربندی سرور'],
+              ['موتور مسیریابی تطبیقی', 'پیاده‌سازی نشده'],
+              ['تجمیع چند اتصال', 'پیاده‌سازی نشده'],
+              ['عامل بومی روتر و سیستم‌عامل', 'پیاده‌سازی نشده'],
+            ].map(([name, status]) => (
+              <div key={name} className="rounded-xl border border-slate-800 bg-slate-950 p-3">
+                <p className="text-sm text-slate-300">{name}</p>
+                <p className="mt-2 text-xs text-slate-500">{status}</p>
+              </div>
+            ))}
+          </div>
+        </section>
+
+        {running && (
+          <p className="text-center text-xs text-cyan-300" role="status">
+            درخواست‌های واقعی در حال اجرا هستند؛ این صفحه تا پایان انتقال داده عددی نمایش نمی‌دهد.
+          </p>
+        )}
       </div>
-    </div>
+    </main>
   );
-};
+}
